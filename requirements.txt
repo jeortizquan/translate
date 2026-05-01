@@ -1,0 +1,27 @@
+# Live Translate — Python dependencies
+# pip install -r requirements.txt
+
+# ── Web framework ──────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+websockets>=12.0
+python-multipart>=0.0.9
+pydantic>=2.0.0
+aiofiles>=23.0.0
+
+# ── TTS — Piper (Python library, no binary required) ──────────────────────────
+# Provides:  from piper import PiperVoice
+piper-tts>=1.4.0
+
+# ── Translation ────────────────────────────────────────────────────────────────
+argostranslate>=1.9.6          # Offline neural translation
+httpx>=0.27.0                  # HTTP client for Gemma/Ollama API
+
+# ── Audio device enumeration ───────────────────────────────────────────────────
+# macOS: brew install portaudio   before pip install pyaudio
+# Linux: sudo apt install portaudio19-dev
+pyaudio>=0.2.14
+
+# ── Optional: Supertonic TTS ──────────────────────────────────────────────────
+# pip install git+https://github.com/supertone-inc/supertonic.git
+# numpy>=1.24.0

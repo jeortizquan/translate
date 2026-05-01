@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Translate — Operator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0a0c10;
+    --surface: #111318;
+    --border:  #1e2229;
+    --accent:  #00e5ff;
+    --danger:  #ff4d6d;
+    --ok:      #7fff6e;
+    --text:    #e4e8f0;
+    --muted:   #5a6278;
+    --card:    #13161c;
+    --r:       8px;
+    --mono:    'JetBrains Mono', monospace;
+    --sans:    'Sora', sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;display:flex;flex-direction:column}
+
+  /* header */
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100}
+  .logo{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--accent);letter-spacing:-.5px}
+  .logo span{color:var(--danger)}
+  .status-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);transition:background .3s;flex-shrink:0}
+  .status-dot.active{background:var(--ok);box-shadow:0 0 7px var(--ok)}
+  .status-dot.error{background:var(--danger);box-shadow:0 0 7px var(--danger)}
+  #statusLabel{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .spacer{flex:1}
+  .conn-badge{font-family:var(--mono);font-size:11px;color:var(--accent);background:rgba(0,229,255,.07);padding:3px 10px;border-radius:20px;border:1px solid rgba(0,229,255,.2)}
+
+  /* layout */
+  .layout{display:grid;grid-template-columns:290px 1fr;flex:1;overflow:hidden}
+  aside{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:18px 14px;display:flex;flex-direction:column;gap:18px}
+  main{display:flex;flex-direction:column;gap:14px;padding:18px;overflow-y:auto}
+
+  /* sidebar sections */
+  .sec-label{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .ctrl{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
+  label{font-size:11px;color:var(--muted)}
+  select,input[type=text]{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 9px;outline:none;appearance:none;transition:border-color .2s}
+  select:focus,input:focus{border-color:var(--accent)}
+  select option{background:var(--surface)}
+  input[type=range]{width:100%;height:4px;accent-color:var(--accent);cursor:pointer;padding:0;appearance:none;background:var(--border);border-radius:2px}
+  .range-row{display:flex;align-items:center;gap:8px}
+  .range-val{font-family:var(--mono);font-size:11px;color:var(--accent);width:34px;text-align:right;flex-shrink:0}
+
+  /* buttons */
+  .btn{padding:8px 14px;border-radius:var(--r);border:none;font-family:var(--mono);font-size:11px;font-weight:600;cursor:pointer;transition:opacity .15s,transform .1s;letter-spacing:.4px}
+  .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+  .btn-primary{background:var(--accent);color:#000}
+  .btn-danger{background:var(--danger);color:#fff}
+  .btn-success{background:var(--ok);color:#000}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .btn-full{width:100%}
+  #startStopBtn{padding:13px;font-size:13px;letter-spacing:1px;border-radius:10px}
+
+  /* cards */
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .card-title{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+
+  /* language grid */
+  .lang-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+  .lang-pill{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 4px;text-align:center;transition:border-color .3s}
+  .lang-pill.has-users{border-color:rgba(0,229,255,.35)}
+  .lang-pill .flag{font-size:17px;display:block}
+  .lang-pill .code{font-family:var(--mono);font-size:9px;color:var(--muted)}
+  .lang-pill .count{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--accent);display:block;margin-top:1px}
+  .lang-pill.has-users .count{color:var(--ok)}
+
+  /* transcript */
+  .t-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:10px;height:190px;overflow-y:auto;font-family:var(--mono);font-size:11px;line-height:1.8;scroll-behavior:smooth}
+  .t-box .seg{display:flex;gap:8px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03);animation:fadeIn .3s ease}
+  .t-box .ts{color:var(--muted);flex-shrink:0}
+
+  /* voice table */
+  .v-table{width:100%;border-collapse:collapse}
+  .v-table th,.v-table td{padding:5px 7px;font-size:11px;border-bottom:1px solid var(--border);text-align:left}
+  .v-table th{font-family:var(--mono);color:var(--muted);font-weight:400}
+  .v-table select{padding:3px 5px;font-size:11px}
+
+  /* log */
+  .log-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:9px;height:120px;overflow-y:auto;font-family:var(--mono);font-size:10px;line-height:1.7;color:var(--muted)}
+  .log-info{color:var(--accent)}.log-ok{color:var(--ok)}.log-warn{color:#ffb300}.log-error{color:var(--danger)}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;margin-bottom:12px}
+  .tab-btn{padding:5px 12px;background:transparent;border:1px solid var(--border);border-radius:var(--r);color:var(--muted);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s}
+  .tab-btn.active{background:rgba(0,229,255,.1);border-color:var(--accent);color:var(--accent)}
+  .tab-panel{display:none}.tab-panel.active{display:block}
+
+  /* toast */
+  #toast{position:fixed;bottom:22px;right:22px;background:var(--ok);color:#000;padding:9px 16px;border-radius:8px;font-family:var(--mono);font-size:11px;font-weight:700;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;z-index:200;pointer-events:none}
+  #toast.show{opacity:1;transform:translateY(0)}
+
+  @keyframes fadeIn{from{opacity:0;transform:translateX(-5px)}to{opacity:1;transform:none}}
+  ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">LIVE<span>TRANSLATE</span></div>
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusLabel">Disconnected</span>
+  <div class="spacer"></div>
+  <div class="conn-badge"><span id="totalConn">0</span> listeners</div>
+</header>
+
+<div class="layout">
+
+  <!-- ── SIDEBAR ── -->
+  <aside>
+
+    <div>
+      <div class="sec-label">Broadcast Control</div>
+      <button id="startStopBtn" class="btn btn-success btn-full" onclick="toggleSTT()">▶ START</button>
+    </div>
+
+    <div>
+      <div class="sec-label">Speech Recognition</div>
+      <div class="ctrl">
+        <label>Whisper Model</label>
+        <select id="whisperModel">
+          <option value="tiny">tiny · fastest</option>
+          <option value="base" selected>base · fast</option>
+          <option value="small">small · balanced</option>
+          <option value="medium">medium · accurate</option>
+          <option value="large-v3">large-v3 · best</option>
+        </select>
+      </div>
+      <div class="ctrl">
+        <label>Source Language</label>
+        <select id="sourceLang">
+          <option value="en">🇬🇧 English (default)</option>
+          <option value="nl">🇳🇱 Dutch</option>
+          <option value="es">🇪🇸 Spanish</option>
+        </select>
+      </div>
+      <div class="ctrl">
+        <label>Microphone</label>
+        <select id="micSelect"><option value="0">Loading…</option></select>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">Translation Engine</div>
+      <div class="ctrl">
+        <select id="translationEngine" onchange="onTranslationChange()">
+          <option value="argos">Argostranslate (offline)</option>
+          <option value="gemma4b">Gemma 4B (Ollama)</option>
+          <option value="gemma12b">Gemma 12B (Ollama)</option>
+        </select>
+      </div>
+      <div class="ctrl" id="gemmaHostRow" style="display:none">
+        <label>Ollama Host</label>
+        <input type="text" id="gemmaHost" value="http://localhost:11434">
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label">TTS Engine</div>
+      <div class="ctrl">
+        <select id="ttsEngine" onchange="loadVoices()">
+          <option value="piper">Piper (all languages)</option>
+          <option value="parkiet">Parkiet (all languages)</option>
+          <option value="supertonic">Supertonic (es/pt/fr + Piper fallback)</option>
+        </select>
+      </div>
+      <div class="ctrl">
+        <label>Voice Speed — <span id="speedVal">1.00</span>×</label>
+        <div class="range-row">
+          <input type="range" id="ttsSpeed" min="0.5" max="2.0" step="0.05" value="1.0"
+                 oninput="document.getElementById('speedVal').textContent=parseFloat(this.value).toFixed(2)">
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn btn-primary btn-full" onclick="applySettings()">Apply Settings</button>
+      <button class="btn btn-ghost btn-full" onclick="loadVoices()">↺ Reload Voices</button>
+    </div>
+
+    <div>
+      <div class="sec-label">Client Portal URL</div>
+      <div id="clientUrl" style="font-family:var(--mono);font-size:10px;color:var(--accent);word-break:break-all;margin-top:4px"></div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main>
+
+    <div class="card">
+      <div class="card-title">Active Listeners by Language</div>
+      <div class="lang-grid" id="langGrid"></div>
+    </div>
+
+    <div class="card" style="flex:1">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('transcript',this)">Live Transcript</button>
+        <button class="tab-btn" onclick="switchTab('voices',this)">Voice Overrides</button>
+        <button class="tab-btn" onclick="switchTab('log',this)">System Log</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-transcript">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">Real-time original speech</span>
+          <button class="btn btn-ghost" style="padding:3px 9px;font-size:9px;margin-left:auto" onclick="clearTranscript()">Clear</button>
+        </div>
+        <div class="t-box" id="transcriptBox"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-voices">
+        <p style="font-size:11px;color:var(--muted);margin-bottom:10px;font-family:var(--mono)">
+          Voice .onnx files go in <code>voices/&lt;lang_code&gt;/</code>.
+          Multiple files are auto-detected. Leave blank to use the first found.
+        </p>
+        <table class="v-table">
+          <thead><tr><th>Language</th><th>Voice Model</th></tr></thead>
+          <tbody id="voiceTbody"></tbody>
+        </table>
+        <button class="btn btn-primary" style="margin-top:10px" onclick="applyVoices()">Apply Voice Selection</button>
+      </div>
+
+      <div class="tab-panel" id="tab-log">
+        <div class="log-box" id="logBox"></div>
+        <button class="btn btn-ghost" style="margin-top:7px;padding:3px 9px;font-size:9px" onclick="clearLog()">Clear log</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const LANGS = {
+  en:{name:'English',flag:'🇬🇧'}, nl:{name:'Dutch',flag:'🇳🇱'},
+  es:{name:'Spanish',flag:'🇪🇸'}, pt:{name:'Portuguese',flag:'🇵🇹'},
+  fr:{name:'French',flag:'🇫🇷'},  de:{name:'German',flag:'🇩🇪'},
+  it:{name:'Italian',flag:'🇮🇹'}, uk:{name:'Ukrainian',flag:'🇺🇦'},
+};
+
+let ws = null, sttRunning = false;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.onload = async () => {
+  buildLangGrid();
+  document.getElementById('clientUrl').textContent =
+    `${location.protocol}//${location.hostname}:${location.port}/client`;
+  await loadMicrophones();
+  await loadStatus();
+  connectWS();
+};
+
+// ── Lang grid ─────────────────────────────────────────────────────────────────
+function buildLangGrid() {
+  const g = document.getElementById('langGrid');
+  for (const [code, info] of Object.entries(LANGS)) {
+    g.innerHTML += `
+      <div class="lang-pill" id="pill-${code}">
+        <span class="flag">${info.flag}</span>
+        <span class="code">${code.toUpperCase()}</span>
+        <span class="count" id="cnt-${code}">0</span>
+      </div>`;
+  }
+}
+function updateCounts(counts) {
+  let total = 0;
+  for (const code of Object.keys(LANGS)) {
+    const n = counts[code] || 0; total += n;
+    document.getElementById(`cnt-${code}`).textContent = n;
+    document.getElementById(`pill-${code}`).classList.toggle('has-users', n > 0);
+  }
+  document.getElementById('totalConn').textContent = total;
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/operator`);
+  ws.onopen  = () => { setStatus('active','Connected'); log('WS connected','ok'); };
+  ws.onclose = () => { setStatus('','Disconnected'); setTimeout(connectWS, 3000); };
+  ws.onerror = () => log('WS error','error');
+  ws.onmessage = e => handleMsg(JSON.parse(e.data));
+  setInterval(() => ws && ws.readyState === 1 && ws.send('ping'), 20000);
+}
+
+function handleMsg(m) {
+  if (m.type === 'init') {
+    sttRunning = m.running; updateStartStop();
+    if (m.connections) updateCounts(m.connections);
+    if (m.settings)    applyServerSettings(m.settings);
+  } else if (m.type === 'settings_updated') {
+    applyServerSettings(m.settings); log('Settings applied','ok');
+  } else if (m.type === 'stt_started') {
+    sttRunning = true; updateStartStop(); log(`STT started — ${m.model}`,'ok');
+  } else if (m.type === 'stt_stopped') {
+    sttRunning = false; updateStartStop(); log('STT stopped','warn');
+  } else if (m.type === 'transcript') {
+    addTranscript(m.text);
+  } else if (m.connections) {
+    updateCounts(m.connections);
+  }
+}
+
+function applyServerSettings(s) {
+  if (s.whisper_model)      document.getElementById('whisperModel').value = s.whisper_model;
+  if (s.source_language)    document.getElementById('sourceLang').value   = s.source_language;
+  if (s.translation_engine) document.getElementById('translationEngine').value = s.translation_engine;
+  if (s.tts_engine)         document.getElementById('ttsEngine').value    = s.tts_engine;
+  if (s.tts_speed != null) {
+    document.getElementById('ttsSpeed').value = s.tts_speed;
+    document.getElementById('speedVal').textContent = parseFloat(s.tts_speed).toFixed(2);
+  }
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    sttRunning = d.running; updateStartStop();
+    updateCounts(d.connections_by_lang || {});
+    applyServerSettings({
+      whisper_model: d.whisper_model, source_language: d.source_language,
+      translation_engine: d.translation_engine, tts_engine: d.tts_engine, tts_speed: d.tts_speed,
+    });
+  } catch(e) { log('Could not fetch status: '+e.message,'error'); }
+}
+
+// ── Microphones ───────────────────────────────────────────────────────────────
+async function loadMicrophones() {
+  try {
+    const r = await fetch('/api/microphones');
+    const d = await r.json();
+    const sel = document.getElementById('micSelect');
+    sel.innerHTML = d.microphones.map(m => `<option value="${m.index}">[${m.index}] ${m.name}</option>`).join('');
+  } catch(e) { log('Could not list microphones','warn'); }
+}
+
+// ── Voices ────────────────────────────────────────────────────────────────────
+async function loadVoices() {
+  try {
+    const r = await fetch('/api/voices');
+    const data = await r.json();
+    const tbody = document.getElementById('voiceTbody');
+    tbody.innerHTML = '';
+    for (const [code, voices] of Object.entries(data)) {
+      const info = LANGS[code]; if (!info) continue;
+      tbody.innerHTML += `
+        <tr>
+          <td>${info.flag} ${info.name}</td>
+          <td>
+            <select id="voice-${code}">
+              <option value="">— auto —</option>
+              ${voices.map(v=>`<option value="${v}">${v}</option>`).join('')}
+            </select>
+          </td>
+        </tr>`;
+    }
+  } catch(e) { log('Could not load voices: '+e.message,'error'); }
+}
+
+function applyVoices() {
+  const overrides = {};
+  for (const code of Object.keys(LANGS)) {
+    const sel = document.getElementById(`voice-${code}`);
+    if (sel && sel.value) overrides[code] = sel.value;
+  }
+  sendSettings({ voice_overrides: overrides });
+}
+
+function onTranslationChange() {
+  const v = document.getElementById('translationEngine').value;
+  document.getElementById('gemmaHostRow').style.display = v.startsWith('gemma') ? 'block' : 'none';
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+function collectSettings() {
+  return {
+    whisper_model:      document.getElementById('whisperModel').value,
+    source_language:    document.getElementById('sourceLang').value,
+    microphone_index:   parseInt(document.getElementById('micSelect').value || '0'),
+    translation_engine: document.getElementById('translationEngine').value,
+    tts_engine:         document.getElementById('ttsEngine').value,
+    tts_speed:          parseFloat(document.getElementById('ttsSpeed').value),
+    gemma_host:         document.getElementById('gemmaHost').value,
+  };
+}
+
+async function applySettings(extra={}) {
+  await sendSettings({ ...collectSettings(), ...extra });
+}
+
+async function sendSettings(payload) {
+  try {
+    const r = await fetch('/api/operator/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (r.ok) toast('Settings applied ✓');
+    else log('Failed to apply settings','error');
+  } catch(e) { log('Settings error: '+e.message,'error'); }
+}
+
+// ── STT start/stop ────────────────────────────────────────────────────────────
+async function toggleSTT() {
+  const btn = document.getElementById('startStopBtn');
+  btn.disabled = true;
+  try {
+    if (!sttRunning) {
+      await applySettings();
+      const r = await fetch('/api/operator/start', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:'{}',
+      });
+      const d = await r.json();
+      if (!r.ok) log('Start failed: '+(d.detail||''),'error');
+    } else {
+      await fetch('/api/operator/stop', {method:'POST'});
+    }
+  } catch(e) { log('Toggle error: '+e.message,'error'); }
+  btn.disabled = false;
+}
+
+function updateStartStop() {
+  const btn = document.getElementById('startStopBtn');
+  if (sttRunning) {
+    btn.textContent='⏹ STOP'; btn.className='btn btn-danger btn-full';
+    setStatus('active','Broadcasting');
+  } else {
+    btn.textContent='▶ START'; btn.className='btn btn-success btn-full';
+    setStatus('','Idle');
+  }
+}
+
+// ── Transcript ────────────────────────────────────────────────────────────────
+function addTranscript(text) {
+  const box = document.getElementById('transcriptBox');
+  const now = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const el = document.createElement('div');
+  el.className = 'seg';
+  el.innerHTML = `<span class="ts">${now}</span><span>${esc(text)}</span>`;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  while (box.children.length > 500) box.removeChild(box.firstChild);
+}
+function clearTranscript() { document.getElementById('transcriptBox').innerHTML=''; }
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name==='voices') loadVoices();
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function log(msg, type='info') {
+  const box = document.getElementById('logBox');
+  const el = document.createElement('div');
+  el.className = 'log-'+type;
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  while (box.children.length > 200) box.removeChild(box.firstChild);
+}
+function clearLog() { document.getElementById('logBox').innerHTML=''; }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setStatus(cls, label) {
+  document.getElementById('statusDot').className='status-dot '+cls;
+  document.getElementById('statusLabel').textContent=label;
+}
+function toast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>

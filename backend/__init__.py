@@ -1,0 +1,1 @@
+"""Live Translate — backend package."""
