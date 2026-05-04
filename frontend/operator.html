@@ -208,6 +208,7 @@
         <button class="tab-btn active" onclick="switchTab('transcript',this)">Live Transcript</button>
         <button class="tab-btn" onclick="switchTab('voices',this)">Voice Overrides</button>
         <button class="tab-btn" onclick="switchTab('log',this)">System Log</button>
+        <button class="tab-btn" onclick="switchTab('filter',this)">Word Filter</button>
       </div>
 
       <div class="tab-panel active" id="tab-transcript">
@@ -233,6 +234,34 @@
       <div class="tab-panel" id="tab-log">
         <div class="log-box" id="logBox"></div>
         <button class="btn btn-ghost" style="margin-top:7px;padding:3px 9px;font-size:9px" onclick="clearLog()">Clear log</button>
+
+      <!-- Filter Tab -->
+      <div class="tab-panel" id="tab-filter">
+        <p style="font-size:11px;color:var(--muted);margin-bottom:12px;font-family:var(--mono)">
+          Words are replaced with <strong>****</strong> in both the original transcript and all translations.
+          Custom words are saved to <code>custom_words.txt</code> in the project root.
+        </p>
+
+        <!-- Add word -->
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input type="text" id="filterNewWord" placeholder="Type a word or phrase…"
+                 style="flex:1" onkeydown="if(event.key==='Enter')addFilterWord()">
+          <button class="btn btn-primary" onclick="addFilterWord()" style="white-space:nowrap">+ Add</button>
+        </div>
+
+        <!-- Custom words list -->
+        <div class="sec-label" style="margin-bottom:6px">Custom Words (<span id="filterCustomCount">0</span>)</div>
+        <div id="filterCustomList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;min-height:32px"></div>
+
+        <!-- Default words (read-only view) -->
+        <details style="margin-top:4px">
+          <summary style="font-family:var(--mono);font-size:10px;color:var(--muted);cursor:pointer;user-select:none">
+            Built-in word list (<span id="filterBuiltinCount">0</span> words) — click to expand
+          </summary>
+          <div id="filterBuiltinList" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;opacity:.6"></div>
+        </details>
+      </div>
+
       </div>
     </div>
 
@@ -462,6 +491,7 @@ function switchTab(name, btn) {
   btn.classList.add('active');
   document.getElementById('tab-'+name).classList.add('active');
   if (name==='voices') loadVoices();
+  if (name==='filter') loadFilter();
 }
 
 // ── Log ───────────────────────────────────────────────────────────────────────
@@ -487,6 +517,67 @@ function toast(msg) {
   setTimeout(()=>t.classList.remove('show'),2200);
 }
 function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Word Filter ───────────────────────────────────────────────────────────────
+async function loadFilter() {
+  try {
+    const r = await fetch('/api/filter');
+    const d = await r.json();
+    renderFilterCustom(d.custom_words || []);
+    renderFilterBuiltin(d.bad_words || []);
+  } catch(e) { log('Could not load filter: '+e.message,'error'); }
+}
+
+function renderFilterCustom(words) {
+  const el = document.getElementById('filterCustomList');
+  document.getElementById('filterCustomCount').textContent = words.length;
+  el.innerHTML = '';
+  if (!words.length) {
+    el.innerHTML = '<span style="font-size:11px;color:var(--muted);font-family:var(--mono)">No custom words yet.</span>';
+    return;
+  }
+  words.forEach(w => {
+    const chip = document.createElement('div');
+    chip.style.cssText = 'display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-family:var(--mono);font-size:11px';
+    chip.innerHTML = `<span>${esc(w)}</span><button onclick="removeFilterWord('${esc(w)}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;line-height:1;padding:0 0 0 2px">×</button>`;
+    el.appendChild(chip);
+  });
+}
+
+function renderFilterBuiltin(words) {
+  const el = document.getElementById('filterBuiltinList');
+  document.getElementById('filterBuiltinCount').textContent = words.length;
+  el.innerHTML = words.map(w =>
+    `<span style="background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-family:var(--mono);font-size:10px">${esc(w)}</span>`
+  ).join('');
+}
+
+async function addFilterWord() {
+  const input = document.getElementById('filterNewWord');
+  const word = input.value.trim();
+  if (!word) return;
+  try {
+    const r = await fetch('/api/filter/add', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({word}),
+    });
+    const d = await r.json();
+    if (d.added) { toast(`Added: "${word}" ✓`); input.value=''; loadFilter(); }
+    else { toast(`"${word}" already in list`); input.value=''; }
+  } catch(e) { log('Filter add error: '+e.message,'error'); }
+}
+
+async function removeFilterWord(word) {
+  try {
+    await fetch('/api/filter/remove', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({word}),
+    });
+    toast(`Removed: "${word}"`);
+    loadFilter();
+  } catch(e) { log('Filter remove error: '+e.message,'error'); }
+}
+
 </script>
 </body>
 </html>

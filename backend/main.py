@@ -12,6 +12,10 @@ HTTP routes:
   POST /api/operator/settings      → update runtime settings live
   POST /api/operator/start         → start whisper-stream STT
   POST /api/operator/stop          → stop whisper-stream STT
+  GET  /api/filter                  → get current word lists
+  POST /api/filter/add              → add a custom word
+  POST /api/filter/remove           → remove a custom word
+  PUT  /api/filter/custom           → replace full custom word list
 
 WebSocket endpoints:
   WS   /ws/listen/{lang}           → audience: binary WAV + JSON subtitles
@@ -30,6 +34,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .broadcast import manager
+from .filter import profanity_filter
 from .config import (
     LANGUAGES, WHISPER_MODELS, SOURCE_LANGUAGES,
     settings, VOICES_DIR, MODELS_DIR, WHISPER_STREAM_BIN, WHISPER_DIR, FRONTEND_DIR,

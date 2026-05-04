@@ -1,24 +1,8 @@
 """
 Translation Pipeline
 ====================
-Orchestrates the full chain:
-  STT segment → translate to all active languages → TTS → broadcast audio + subtitles
-
-Flow:
-  whisper-stream stdout
-      │
-      └─► on_segment()  ──►  _segment_queue
-                                   │
-                             [_translation_worker]
-                                   │ translates to each active language in parallel
-                                   ├─► broadcast subtitle (JSON) to lang channel
-                                   └─► _audio_queues[lang]
-                                              │
-                                       [_tts_worker per lang]
-                                              │ synthesises WAV once
-                                              └─► broadcast_audio(lang, wav_bytes)
-                                                       │
-                                                  all N listeners for that lang
+STT segment → [profanity filter] → translate to all active languages
+           → [profanity filter on translation] → TTS → broadcast audio + subtitles
 """
 import asyncio
 import logging
@@ -27,18 +11,17 @@ from typing import Optional
 
 from .broadcast import manager
 from .config import LANGUAGES, VOICES_DIR, settings
+from .filter import profanity_filter
 from .translation import make_translator, BaseTranslator
 from .tts import make_tts, BaseTTS
 
 logger = logging.getLogger(__name__)
 
-_SEGMENT_QUEUE_MAXSIZE = 50   # drop oldest if STT is faster than translation
-_AUDIO_QUEUE_MAXSIZE   = 20   # per language
+_SEGMENT_QUEUE_MAXSIZE = 50
+_AUDIO_QUEUE_MAXSIZE   = 20
 
 
 class Pipeline:
-    """Singleton orchestrator — one instance for the lifetime of the server."""
-
     def __init__(self):
         self._segment_queue: asyncio.Queue = asyncio.Queue(maxsize=_SEGMENT_QUEUE_MAXSIZE)
         self._audio_queues:  dict[str, asyncio.Queue] = {
@@ -75,7 +58,6 @@ class Pipeline:
         logger.info("Pipeline stopped")
 
     async def restart_engines(self) -> None:
-        """Call after operator changes TTS or translation engine at runtime."""
         if self._translator:
             await self._translator.teardown()
         if self._tts:
@@ -85,37 +67,38 @@ class Pipeline:
     async def _init_engines(self) -> None:
         self._translator = make_translator(settings.translation_engine, settings.gemma_host)
         await self._translator.setup()
-
         self._tts = make_tts(settings.tts_engine, VOICES_DIR)
         await self._tts.setup()
-
         logger.info(
             "Engines ready — translation=%s  tts=%s",
             settings.translation_engine, settings.tts_engine,
         )
 
-    # ── Public entry point (called by WhisperStreamManager) ───────────────────
+    # ── Entry point ───────────────────────────────────────────────────────────
 
     async def on_segment(self, text: str) -> None:
         text = text.strip()
         if not text:
             return
 
-        # Broadcast original transcript to every connected client
+        # Apply profanity filter to the original STT text
+        clean_text = profanity_filter.clean(text)
+
+        # Broadcast original (filtered) transcript to every connected client
         await manager.broadcast_all_text({
             "type": "transcript",
             "lang": settings.source_language,
-            "text": text,
+            "text": clean_text,
             "ts":   time.time(),
         })
 
-        # Enqueue for translation (drop oldest if full)
+        # Drop into translation queue
         if self._segment_queue.full():
             try:
                 self._segment_queue.get_nowait()
             except asyncio.QueueEmpty:
                 pass
-        self._segment_queue.put_nowait((text, settings.source_language))
+        self._segment_queue.put_nowait((clean_text, settings.source_language))
 
     # ── Workers ───────────────────────────────────────────────────────────────
 
@@ -130,19 +113,21 @@ class Pipeline:
             except asyncio.CancelledError:
                 break
 
-            # Only translate to languages that have at least one active listener
             active = [lang for lang in LANGUAGES if manager.count(lang) > 0]
             if not active:
                 self._segment_queue.task_done()
                 continue
 
             async def _translate_one(lang: str) -> None:
+                # Translate
                 translated = (
                     text
                     if lang == source_lang
                     else await self._translator.translate(text, source_lang, lang)
                 )
-                # Send subtitle text to all listeners of this language
+                # Apply profanity filter to the translated text too
+                translated = profanity_filter.clean(translated)
+
                 await manager.broadcast_text(lang, {
                     "type":     "subtitle",
                     "lang":     lang,
@@ -150,7 +135,6 @@ class Pipeline:
                     "original": text,
                     "ts":       time.time(),
                 })
-                # Enqueue translated text for TTS synthesis
                 try:
                     self._audio_queues[lang].put_nowait(translated)
                 except asyncio.QueueFull:
@@ -187,5 +171,4 @@ class Pipeline:
             queue.task_done()
 
 
-# Singleton
 pipeline = Pipeline()

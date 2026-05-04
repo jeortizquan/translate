@@ -1,0 +1,283 @@
+# =============================================================================
+# Live Translate — Profanity & Offensive Language Filter
+# =============================================================================
+# One word or phrase per line. Lines starting with # are comments.
+# Matching is case-insensitive and whole-word (so "class" won't match "asshole").
+# Add your own entries in custom_words.txt instead of editing this file.
+# =============================================================================
+
+# ── Profanity — General ───────────────────────────────────────────────────────
+ass
+asses
+asshole
+assholes
+asshat
+assface
+assclown
+asswipe
+asshead
+bastard
+bastards
+bitch
+bitches
+bitchy
+bitchass
+bullshit
+bullshitter
+cock
+cocks
+cockhead
+cocksucker
+crap
+crappy
+cunt
+cunts
+damn
+damnit
+damned
+dick
+dicks
+dickhead
+dickheads
+dickface
+dumbass
+dumbasses
+dumbfuck
+dumbfucks
+dumbshit
+fuck
+fucks
+fucker
+fuckers
+fucking
+fucked
+fuckface
+fuckhead
+fuckwit
+fuckboy
+fuckgirl
+fuckoff
+fucknugget
+fucktard
+goddamn
+goddamnit
+horseshit
+jackass
+jackasses
+jerk
+jerks
+motherfucker
+motherfuckers
+motherfucking
+piss
+pisses
+pissed
+prick
+pricks
+pussy
+pussies
+shit
+shits
+shitty
+shitter
+shithead
+shitheads
+shitface
+shitbag
+shithole
+shitholes
+shitshow
+shitfuck
+shitlord
+twat
+twats
+wanker
+wankers
+whore
+whores
+son of a bitch
+sons of bitches
+
+# ── Vulgar Sexual Terms ───────────────────────────────────────────────────────
+blowjob
+blowjobs
+boner
+boners
+boobs
+cum
+cumshot
+dildo
+dildos
+erection
+fingerbang
+fleshlight
+handjob
+handjobs
+jizz
+masturbate
+masturbating
+masturbation
+orgasm
+orgasms
+penis
+penises
+rimjob
+rimming
+scrotum
+semen
+sperm
+vagina
+vaginas
+
+# ── Slurs — Racial & Ethnic ───────────────────────────────────────────────────
+chink
+chinks
+coon
+coons
+cracker
+crackers
+gook
+gooks
+gringo
+kike
+kikes
+kraut
+nig
+nigga
+niggas
+nigger
+niggers
+raghead
+ragheads
+redskin
+redskins
+spic
+spics
+spook
+spooks
+towelhead
+towelheads
+wetback
+wetbacks
+whitey
+wop
+wops
+zipperhead
+
+# ── Slurs — Religious ────────────────────────────────────────────────────────
+christfag
+crusader bastard
+goatfucker
+infidel scum
+
+# ── Slurs — Gender & Sexual Orientation ──────────────────────────────────────
+dyke
+dykes
+faggot
+faggots
+fag
+fags
+femboy
+homo
+homos
+lesbo
+lesbos
+queer bashing
+shemale
+tranny
+trannies
+
+# ── Slurs — Disability ───────────────────────────────────────────────────────
+retard
+retards
+retarded
+mong
+spaz
+spastic
+
+# ── Insults & Degrading Terms ────────────────────────────────────────────────
+bimbo
+bimbos
+cuck
+cucks
+idiot
+idiots
+imbecile
+imbeciles
+loser
+losers
+manwhore
+moron
+morons
+scumbag
+scumbags
+skank
+skanks
+sleazebag
+slut
+sluts
+slutty
+stupid bitch
+trailer trash
+tramp
+tramps
+ugly bitch
+
+# ── Threats & Violent Language ───────────────────────────────────────────────
+blow your brains out
+burn in hell
+cut your throat
+die already
+get cancer
+go die
+go fuck yourself
+go kill yourself
+go to hell
+i hope you die
+i will kill you
+i will murder you
+i'll kill you
+i'm going to kill
+i'm going to murder
+kill yourself
+kys
+murder you
+rot in hell
+shoot yourself
+stab you
+you deserve to die
+
+# ── Hate Speech Phrases ───────────────────────────────────────────────────────
+death to
+ethnic cleansing
+final solution
+gas the
+go back to your country
+hate crime
+master race
+nazi scum
+white power
+white supremacy
+
+# ── Drug References (context-sensitive) ──────────────────────────────────────
+# Uncomment these if your event context requires it:
+# cocaine
+# crack cocaine
+# crystal meth
+# heroin
+# meth
+# methamphetamine
+
+# ── Additional Live Event Specific ───────────────────────────────────────────
+piece of shit
+what the fuck
+what the hell
+what the shit
+holy shit
+holy fuck
+oh fuck
+oh shit
+oh crap
+shut the fuck up
+shut the hell up
+what the crap

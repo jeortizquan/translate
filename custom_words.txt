@@ -1,0 +1,2 @@
+# Add custom words/phrases to block, one per line.
+# Lines starting with # are comments.
