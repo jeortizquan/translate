@@ -199,10 +199,12 @@ let reconnTmr     = null;
 let pingTmr       = null;
 
 // Audio
-let audioUnlocked = false;   // true after user taps Enable
-let audioQueue    = [];      // pending ArrayBuffers
-let isPlaying     = false;
+let audioUnlocked  = false;   // true after user taps Enable
+let audioQueue     = [];      // pending ArrayBuffers
+let isPlaying      = false;
 let nRx = 0, nPl = 0, nErr = 0;
+const PRE_BUFFER   = 2;       // start playing only after N chunks are ready
+                               // absorbs jitter from variable TTS synthesis time
 
 // ─── Boot ─────────────────────────────────────────────────────────────────
 window.onload = () => {
@@ -418,7 +420,16 @@ function playProbe() {
 }
 
 async function drainQueue() {
-  if (isPlaying || !audioUnlocked || audioQueue.length === 0) return;
+  if (isPlaying || !audioUnlocked) return;
+  // Pre-buffer: wait until we have at least PRE_BUFFER chunks ready
+  // This smooths over variable TTS synthesis latency
+  if (audioQueue.length < PRE_BUFFER && audioQueue.length > 0) {
+    // We have some chunks but not enough — wait briefly for more
+    setTimeout(() => { if (!isPlaying) drainQueue(); }, 300);
+    return;
+  }
+  if (audioQueue.length === 0) return;
+
   isPlaying = true;
 
   while (audioQueue.length > 0 && audioUnlocked) {

@@ -1,8 +1,16 @@
 """
 Translation Pipeline
 ====================
-STT segment → [profanity filter] → translate to all active languages
-           → [profanity filter on translation] → TTS → broadcast audio + subtitles
+Orchestrates:
+  whisper-stream → SegmentCoalescer → translate all active languages
+                 → profanity filter → TTS + silence trim → broadcast
+
+Natural-sounding improvements:
+  1. SegmentCoalescer accumulates partial STT fragments into complete sentences
+     before they reach translation/TTS — eliminates per-fragment gaps.
+  2. WAV silence trimming removes Piper/Supertonic's leading/trailing dead air.
+  3. Per-language TTS workers run in parallel so all languages synthesise
+     concurrently, not sequentially.
 """
 import asyncio
 import logging
@@ -10,10 +18,12 @@ import time
 from typing import Optional
 
 from .broadcast import manager
+from .coalescer import SegmentCoalescer
 from .config import LANGUAGES, VOICES_DIR, settings
 from .filter import profanity_filter
 from .translation import make_translator, BaseTranslator
 from .tts import make_tts, BaseTTS
+from .tts.utils import trim_wav_silence
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +43,14 @@ class Pipeline:
         self._tasks:      list[asyncio.Task]       = []
         self._running:    bool                     = False
 
+        # SegmentCoalescer buffers partial whisper fragments into full sentences
+        self._coalescer = SegmentCoalescer(
+            on_sentence      = self._on_sentence,
+            silence_timeout  = 2.0,   # flush after 2s of silence
+            max_words        = 60,    # never hold more than 60 words
+            min_words        = 3,     # don't synthesise single words
+        )
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
@@ -47,6 +65,8 @@ class Pipeline:
 
     async def stop(self) -> None:
         self._running = False
+        # Flush any buffered text before stopping
+        await self._coalescer.flush_now()
         for t in self._tasks:
             t.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
@@ -74,17 +94,27 @@ class Pipeline:
             settings.translation_engine, settings.tts_engine,
         )
 
-    # ── Entry point ───────────────────────────────────────────────────────────
+    # ── STT entry point (called by WhisperStreamManager) ─────────────────────
 
     async def on_segment(self, text: str) -> None:
+        """
+        Receives raw STT fragments from whisper-stream.
+        Forwards to the SegmentCoalescer which buffers until a complete
+        sentence is ready, then calls _on_sentence().
+        """
         text = text.strip()
         if not text:
             return
+        await self._coalescer.push(text)
 
-        # Apply profanity filter to the original STT text
+    # ── Coalescer callback (complete sentence ready) ──────────────────────────
+
+    async def _on_sentence(self, text: str) -> None:
+        """Called by the coalescer with a complete, natural sentence."""
+        # Apply profanity filter to original text
         clean_text = profanity_filter.clean(text)
 
-        # Broadcast original (filtered) transcript to every connected client
+        # Broadcast original (filtered) transcript to all clients
         await manager.broadcast_all_text({
             "type": "transcript",
             "lang": settings.source_language,
@@ -92,7 +122,7 @@ class Pipeline:
             "ts":   time.time(),
         })
 
-        # Drop into translation queue
+        # Enqueue for translation (drop oldest if queue is full)
         if self._segment_queue.full():
             try:
                 self._segment_queue.get_nowait()
@@ -100,7 +130,7 @@ class Pipeline:
                 pass
         self._segment_queue.put_nowait((clean_text, settings.source_language))
 
-    # ── Workers ───────────────────────────────────────────────────────────────
+    # ── Translation worker ────────────────────────────────────────────────────
 
     async def _translation_worker(self) -> None:
         while self._running:
@@ -125,9 +155,10 @@ class Pipeline:
                     if lang == source_lang
                     else await self._translator.translate(text, source_lang, lang)
                 )
-                # Apply profanity filter to the translated text too
+                # Apply profanity filter to translated output too
                 translated = profanity_filter.clean(translated)
 
+                # Send subtitle to clients
                 await manager.broadcast_text(lang, {
                     "type":     "subtitle",
                     "lang":     lang,
@@ -135,16 +166,21 @@ class Pipeline:
                     "original": text,
                     "ts":       time.time(),
                 })
+
+                # Enqueue for TTS synthesis
                 try:
                     self._audio_queues[lang].put_nowait(translated)
                 except asyncio.QueueFull:
-                    logger.debug("Audio queue [%s] full — skipping", lang)
+                    logger.debug("Audio queue [%s] full — skipping segment", lang)
 
+            # All languages translated in parallel
             await asyncio.gather(
                 *[_translate_one(lang) for lang in active],
                 return_exceptions=True,
             )
             self._segment_queue.task_done()
+
+    # ── TTS workers (one per language, run in parallel) ───────────────────────
 
     async def _tts_worker(self, lang: str) -> None:
         queue = self._audio_queues[lang]
@@ -166,8 +202,12 @@ class Pipeline:
                 speed=settings.tts_speed,
                 voice_override=voice_override,
             )
+
             if audio_bytes:
+                # Trim leading/trailing silence for continuous playback
+                audio_bytes = trim_wav_silence(audio_bytes)
                 await manager.broadcast_audio(lang, audio_bytes)
+
             queue.task_done()
 
 
