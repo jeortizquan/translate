@@ -17,11 +17,17 @@ LANGUAGES = {
     "uk": {"name": "Ukrainian",  "flag": "🇺🇦", "piper_voice": "uk_UA-ukrainian_tts-medium"},
 }
 
-# Languages supported natively by Supertonic TTS (falls back to Piper for others)
+# Languages supported natively by Supertonic TTS
 SUPERTONIC_LANGUAGES = {"es", "pt", "fr"}
 
 # ─── Source Language Options ───────────────────────────────────────────────────
-SOURCE_LANGUAGES = ["en", "nl", "es"]   # en=default, nl=secondary, es=third
+SOURCE_LANGUAGES = ["en", "nl", "es"]
+
+# ─── STT Engines ──────────────────────────────────────────────────────────────
+STT_ENGINES = [
+    "whisper.cpp",      # subprocess-based, uses whisper-stream binary + Metal GPU
+    "faster-whisper",   # Python library, CPU INT8 on macOS / CUDA on Linux
+]
 
 # ─── Whisper Models ────────────────────────────────────────────────────────────
 WHISPER_MODELS = ["tiny", "base", "small", "medium", "large-v3"]
@@ -40,23 +46,28 @@ WHISPER_STREAM_BIN = os.environ.get(
     os.path.join(WHISPER_DIR, "build", "bin", "whisper-stream"),
 )
 
-# ─── Runtime Settings (mutated live by the operator API) ──────────────────────
+# ─── Runtime Settings ──────────────────────────────────────────────────────────
 @dataclass
 class AppSettings:
     # STT
+    stt_engine:         str   = "whisper.cpp"  # "whisper.cpp" | "faster-whisper"
     whisper_model:      str   = "base"
     source_language:    str   = "en"
     microphone_index:   int   = 0
 
+    # faster-whisper specific
+    fw_device:          str   = "auto"         # "auto" | "cpu" | "cuda"
+    fw_compute_type:    str   = "int8"         # "int8" | "float16" | "auto"
+    fw_vad_threshold:   float = 0.01           # energy VAD threshold (0.0–1.0)
+    fw_silence_ms:      int   = 700            # ms of silence to end speech segment
+
     # Translation
-    translation_engine: str   = "argos"            # "argos" | "gemma4b" | "gemma12b"
+    translation_engine: str   = "argos"
     gemma_host:         str   = "http://localhost:11434"
 
     # TTS
-    tts_engine:         str   = "piper"            # "piper" | "parkiet" | "supertonic"
-    tts_speed:          float = 1.0                # 0.5 – 2.0
-
-    # Per-language voice overrides  lang_code -> filename inside voices/<lang>/
+    tts_engine:         str   = "piper"
+    tts_speed:          float = 1.0
     voice_overrides:    dict  = field(default_factory=dict)
 
     # Server
@@ -65,5 +76,4 @@ class AppSettings:
     max_connections:    int   = 1000
 
 
-# Singleton shared by the entire app
 settings = AppSettings()

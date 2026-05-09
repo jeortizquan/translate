@@ -126,6 +126,15 @@
 
     <div>
       <div class="sec-label">Speech Recognition</div>
+
+      <div class="ctrl">
+        <label>STT Engine</label>
+        <select id="sttEngine" onchange="onSttEngineChange()">
+          <option value="whisper.cpp">whisper.cpp (whisper-stream + Metal GPU)</option>
+          <option value="faster-whisper">faster-whisper 1.2.1 (Python + INT8)</option>
+        </select>
+      </div>
+
       <div class="ctrl">
         <label>Whisper Model</label>
         <select id="whisperModel">
@@ -136,6 +145,7 @@
           <option value="large-v3">large-v3 · best</option>
         </select>
       </div>
+
       <div class="ctrl">
         <label>Source Language</label>
         <select id="sourceLang">
@@ -144,9 +154,49 @@
           <option value="es">🇪🇸 Spanish</option>
         </select>
       </div>
+
       <div class="ctrl">
         <label>Microphone</label>
         <select id="micSelect"><option value="0">Loading…</option></select>
+      </div>
+
+      <!-- faster-whisper specific settings -->
+      <div id="fwSettings" style="display:none;border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+        <div class="sec-label" style="margin-bottom:8px">faster-whisper settings</div>
+        <div class="ctrl">
+          <label>Device</label>
+          <select id="fwDevice">
+            <option value="auto">auto (detect best)</option>
+            <option value="cpu">cpu · INT8 (Apple Silicon optimised)</option>
+            <option value="cuda">cuda · FP16 (NVIDIA GPU)</option>
+          </select>
+        </div>
+        <div class="ctrl" style="margin-top:8px">
+          <label>Compute Type</label>
+          <select id="fwComputeType">
+            <option value="int8" selected>int8 · fast / low memory</option>
+            <option value="float16">float16 · GPU quality</option>
+            <option value="auto">auto</option>
+          </select>
+        </div>
+        <div class="ctrl" style="margin-top:8px">
+          <label>VAD Energy Threshold — <span id="fwVadVal">0.010</span></label>
+          <div class="range-row">
+            <input type="range" id="fwVadThresh" min="0.001" max="0.1" step="0.001" value="0.01"
+                   oninput="document.getElementById('fwVadVal').textContent=parseFloat(this.value).toFixed(3)">
+          </div>
+        </div>
+        <div class="ctrl" style="margin-top:8px">
+          <label>Silence Timeout — <span id="fwSilenceVal">700</span> ms</label>
+          <div class="range-row">
+            <input type="range" id="fwSilenceMs" min="200" max="2000" step="50" value="700"
+                   oninput="document.getElementById('fwSilenceVal').textContent=this.value">
+          </div>
+        </div>
+        <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:6px;font-family:var(--mono);font-size:10px;color:var(--muted)">
+          💡 Apple Silicon: uses optimised INT8 CPU.<br>
+          Install <code>mlx-whisper</code> to enable Metal GPU.
+        </div>
       </div>
     </div>
 
@@ -342,6 +392,10 @@ function handleMsg(m) {
 }
 
 function applyServerSettings(s) {
+  if (s.stt_engine) {
+    document.getElementById('sttEngine').value = s.stt_engine;
+    onSttEngineChange();
+  }
   if (s.whisper_model)      document.getElementById('whisperModel').value = s.whisper_model;
   if (s.source_language)    document.getElementById('sourceLang').value   = s.source_language;
   if (s.translation_engine) document.getElementById('translationEngine').value = s.translation_engine;
@@ -349,6 +403,16 @@ function applyServerSettings(s) {
   if (s.tts_speed != null) {
     document.getElementById('ttsSpeed').value = s.tts_speed;
     document.getElementById('speedVal').textContent = parseFloat(s.tts_speed).toFixed(2);
+  }
+  if (s.fw_device)       document.getElementById('fwDevice').value = s.fw_device;
+  if (s.fw_compute_type) document.getElementById('fwComputeType').value = s.fw_compute_type;
+  if (s.fw_vad_threshold != null) {
+    document.getElementById('fwVadThresh').value = s.fw_vad_threshold;
+    document.getElementById('fwVadVal').textContent = parseFloat(s.fw_vad_threshold).toFixed(3);
+  }
+  if (s.fw_silence_ms != null) {
+    document.getElementById('fwSilenceMs').value = s.fw_silence_ms;
+    document.getElementById('fwSilenceVal').textContent = s.fw_silence_ms;
   }
 }
 
@@ -416,6 +480,7 @@ function onTranslationChange() {
 // ── Settings ──────────────────────────────────────────────────────────────────
 function collectSettings() {
   return {
+    stt_engine:         document.getElementById('sttEngine').value,
     whisper_model:      document.getElementById('whisperModel').value,
     source_language:    document.getElementById('sourceLang').value,
     microphone_index:   parseInt(document.getElementById('micSelect').value || '0'),
@@ -423,7 +488,16 @@ function collectSettings() {
     tts_engine:         document.getElementById('ttsEngine').value,
     tts_speed:          parseFloat(document.getElementById('ttsSpeed').value),
     gemma_host:         document.getElementById('gemmaHost').value,
+    fw_device:          document.getElementById('fwDevice').value,
+    fw_compute_type:    document.getElementById('fwComputeType').value,
+    fw_vad_threshold:   parseFloat(document.getElementById('fwVadThresh').value),
+    fw_silence_ms:      parseInt(document.getElementById('fwSilenceMs').value),
   };
+}
+
+function onSttEngineChange() {
+  const isFW = document.getElementById('sttEngine').value === 'faster-whisper';
+  document.getElementById('fwSettings').style.display = isFW ? 'block' : 'none';
 }
 
 async function applySettings(extra={}) {
